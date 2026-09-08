@@ -22,6 +22,8 @@ CKPT_DIR = os.environ.get('RECGEN_RELEASED_CKPTS', os.path.join(RELEASE_ROOT, 'c
 
 CASES = [
     ('stereo_config.json', 'stereo_denoiser_ema0.9999_step0055000.pt'),
+    ('sparse-structure-ft-70k/stereo_config.json',
+     'sparse-structure-ft-70k/stereo_denoiser_ema0.9999_step0070000.pt'),
     ('slat_config.json', 'slat_denoiser_ema0.9999_step0075000.pt'),
 ]
 
@@ -30,6 +32,8 @@ CASES = [
 def test_released_ckpt_strict_load(config_name, ckpt_name):
     if not os.path.isdir(CKPT_DIR):
         pytest.skip(f'released checkpoints not found at {CKPT_DIR}')
+    if not os.path.exists(os.path.join(CKPT_DIR, ckpt_name)):
+        pytest.skip(f'{ckpt_name} not found under {CKPT_DIR}')
 
     from recgen_inference.recgen_modules import models
 

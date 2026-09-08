@@ -3,6 +3,12 @@
 This repository contains inference and training code for **RecGen**, a model for single-view and multi-view 3D reconstruction from RGB-D.
 Given an RGB image, a depth map, an object mask, and camera intrinsics, RecGen produces a textured mesh, a Gaussian splat, and the object's 6-DoF pose in the camera frame.
 
+**Release highlights**
+
+* Updated stage-1 checkpoint, fine-tuned with color jitter and SAM2-predicted-mask mixing for robustness to real-world lighting and imperfect masks (the paper checkpoint stays available and is what `recgen_eval` uses).
+* Optional **post-hoc gamma/color correction** of the generated asset against the input photo.
+* Full **training-data release**, including SAM2-predicted masks and with poor-quality renders/poses filtered out.
+
 ## Setup
 
 RecGen depends on `torch`, a few 3D libraries, and two CUDA extensions (`spconv`, `diff-gaussian-rasterization`). We recommend [pixi](https://pixi.sh), which pins Python, CUDA, and PyTorch in a single lockfile:
@@ -181,6 +187,11 @@ stages:
 * `ss/` — stage-1 (sparse structure) collection, ~5 views per object.
 * `slat/` — stage-2 (structured latent) collection, ~20 views per object
   (aesthetic-filtered subset).
+
+The released shards ship SAM2-predicted masks alongside the ground-truth
+masks (used to fine-tune the released stage-1 checkpoint), and poor-quality
+renders and pose alignments have been filtered out via the included
+blacklists.
 
 ```bash
 # collection: {ss|slat|all}   subset: {ABO|HSSD|Objaverse|PartNeXt|all}

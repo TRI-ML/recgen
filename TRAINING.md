@@ -15,10 +15,21 @@ base (the TRELLIS VAEs/decoders stay frozen and are **not** trained):
 
 - **Stage 1 — sparse structure**: `SparseStructurePoseFlowModel` +
   `MultiImageConditionedFlowMatchingCFGTrainer`
-  → `stereo_denoiser_ema0.9999_step0055000.pt`
+  → `stereo_denoiser_ema0.9999_step0055000.pt` (paper) and
+  `sparse-structure-ft-70k/stereo_denoiser_ema0.9999_step0070000.pt`
+  (current default, ships with its own config + pose stats)
 - **Stage 2 — structured latent (SLAT)**: `ElasticSLatCondFlowModel` +
   `MultiImageConditionedSparseFlowMatchingCFGTrainer`
   → `slat_denoiser_ema0.9999_step0075000.pt`
+
+The default stage-1 checkpoint (step 70k) is the paper model fine-tuned
+(lr 1e-5, EMA 0.9999) on the released `ss/` collection with
+SAM2-predicted-mask mixing (`mask_source: "mix"`, `sam2_mask_prob: 0.5`) and
+ColorJitter (brightness/contrast/saturation 0.4, hue 0.1) — the corresponding
+dataset knobs are documented in Section 4. It improves robustness to
+real-world lighting and imperfect masks; the published evaluation table
+corresponds to the paper checkpoint (step 55k), which `recgen_eval` pins
+explicitly.
 
 ---
 

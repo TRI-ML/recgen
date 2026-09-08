@@ -30,16 +30,28 @@ from recgen_inference.recgen_modules.utils.render_utils import render_mesh_overl
 from recgen_inference.recgen_modules.utils.pose_utils import parse_pose_output
 
 
+# The exact weights behind the published evaluation table. The repo's default
+# checkpoint set may advance (e.g. the SAM2/ColorJitter-fine-tuned stage-1
+# model), so the eval pins the paper files explicitly.
+PAPER_SPARSE_CKPT = "stereo_denoiser_ema0.9999_step0055000.pt"
+PAPER_SLAT_CKPT = "slat_denoiser_ema0.9999_step0075000.pt"
+
+
 def load_pipeline_multiview(checkpoint_slat=None, checkpoint_sparse=None):
     """Load the RecGen pipeline with multi-view SS checkpoint.
 
-    Thin wrapper over the public ``build_recgen.build`` (which replicates the
-    internal ``load_pipeline``): pass local checkpoint paths, or None to
-    auto-download the released paper checkpoints from HuggingFace
-    (TRI-ML/RecGen). Model configs and pose-normalization stats are resolved
-    from files next to the checkpoints, falling back to the HF repo — the same
-    resolution order the paper evaluation used.
+    Thin wrapper over the public ``build_recgen.build``: pass local checkpoint
+    paths, or None to auto-download the released PAPER checkpoints from
+    HuggingFace (TRI-ML/RecGen). Model configs and pose-normalization stats
+    are resolved from files next to the checkpoints, falling back to the HF
+    repo — the same resolution order the paper evaluation used.
     """
+    from huggingface_hub import hf_hub_download
+
+    if checkpoint_sparse is None:
+        checkpoint_sparse = hf_hub_download("TRI-ML/RecGen", PAPER_SPARSE_CKPT)
+    if checkpoint_slat is None:
+        checkpoint_slat = hf_hub_download("TRI-ML/RecGen", PAPER_SLAT_CKPT)
     return build_recgen.build(
         "recgen_base.multiview_stereo",
         checkpoint_slat=checkpoint_slat,

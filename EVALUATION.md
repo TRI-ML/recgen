@@ -40,8 +40,11 @@ plus `pip install spconv-cu120` (or `spconv-cu118`) matching your CUDA.
 The evaluation defaults to the released paper checkpoints on HuggingFace
 ([TRI-ML/RecGen](https://huggingface.co/TRI-ML/RecGen)) — the stereo
 sparse-structure denoiser (EMA, step 55k) and the SLAT denoiser (EMA, step
-75k), exactly the weights behind the table above. They are auto-downloaded on
-first use; pass `--ckpt_path_structure/--ckpt_path_slats` for local files.
+75k), exactly the weights behind the table above — NOT the repo's default
+stage-1 checkpoint (step 70k, SAM2/ColorJitter fine-tune), which the eval
+deliberately does not use so the published numbers stay reproducible. They
+are auto-downloaded on first use; pass
+`--ckpt_path_structure/--ckpt_path_slats` for local files.
 
 ## 3. Data
 

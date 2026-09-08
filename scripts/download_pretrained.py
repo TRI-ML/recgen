@@ -5,8 +5,10 @@ Download the checkpoints needed for RecGen training and fine-tuning.
 Fetches into ./checkpoints/ (relative paths match the shipped training configs):
 
   checkpoints/RecGen/
-      stereo_denoiser_ema0.9999_step0055000.pt   released stage-1 checkpoint
-      slat_denoiser_ema0.9999_step0075000.pt     released stage-2 checkpoint
+      stereo_denoiser_ema0.9999_step0055000.pt   stage-1 paper checkpoint
+      sparse-structure-ft-70k/                   stage-1 default (SAM2/ColorJitter
+                                                 fine-tune) + its config/pose stats
+      slat_denoiser_ema0.9999_step0075000.pt     stage-2 checkpoint
       stereo_config.json, slat_config.json       model configs
       stereo_pose_stats.json, slat_pose_stats.json  (inference-side pose stats)
 
@@ -28,6 +30,9 @@ TRELLIS_REPO = "microsoft/TRELLIS-image-large"
 
 RECGEN_FILES = [
     "stereo_denoiser_ema0.9999_step0055000.pt",
+    "sparse-structure-ft-70k/stereo_denoiser_ema0.9999_step0070000.pt",
+    "sparse-structure-ft-70k/stereo_config.json",
+    "sparse-structure-ft-70k/stereo_pose_stats.json",
     "slat_denoiser_ema0.9999_step0075000.pt",
     "stereo_config.json",
     "slat_config.json",

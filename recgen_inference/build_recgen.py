@@ -49,7 +49,15 @@ def _cfg(
 
 # Model configs. Keyed as "<model-architecture>.<checkpoint>".
 CONFIGS: Final[Dict[str, Dict[str, Any]]] = {
-    "recgen_base.multiview_stereo": _cfg(hf_subdir=""),
+    # Stage 1 = the paper model fine-tuned with ColorJitter and
+    # SAM2-predicted-mask mixing for robustness to real-world lighting and
+    # imperfect segmentation masks; stage 2 (SLAT) = the paper checkpoint.
+    # The paper's stage-1 weights (step 55k) remain on the hub —
+    # recgen_eval pins them explicitly to reproduce the published table.
+    "recgen_base.multiview_stereo": _cfg(
+        hf_subdir="",
+        sparse_ckpt="sparse-structure-ft-70k/stereo_denoiser_ema0.9999_step0070000.pt",
+    ),
 }
 
 
@@ -181,6 +189,14 @@ def build_recgen_base(
     repo_id = config["hf_repo"]
     repo_subdir = config["hf_subdir"]
     sub = lambda p: f"{repo_subdir}/{p}" if repo_subdir else p
+    # Configs and pose stats live NEXT TO their checkpoint in the repo: a
+    # checkpoint stored in a subdirectory (e.g. "sparse-structure-ft-70k/...")
+    # brings its own stereo_config.json / stereo_pose_stats.json, which may
+    # differ from the root (paper) ones.
+    import posixpath
+
+    sparse_repo_dir = posixpath.dirname(sub(config["sparse_ckpt"]))
+    slat_repo_dir = posixpath.dirname(sub(config["slat_ckpt"]))
 
     print("[recgen_inference] Loading pipeline...")
 
@@ -224,7 +240,7 @@ def build_recgen_base(
 
     # Sparse-structure + pose model
     sparse_config = _load_model_config(
-        checkpoint_sparse, config["sparse_config"], repo_id, repo_subdir
+        checkpoint_sparse, config["sparse_config"], repo_id, sparse_repo_dir
     )
     if sparse_config and "models" in sparse_config and "denoiser" in sparse_config["models"]:
         sparse_model_config = sparse_config["models"]["denoiser"]["args"]
@@ -260,7 +276,7 @@ def build_recgen_base(
                 pose_normalizer = PoseNormalizer(stats)
             else:
                 pose_normalizer = _load_pose_stats(
-                    "stereo_pose_stats.json", checkpoint_sparse, repo_id, repo_subdir
+                    "stereo_pose_stats.json", checkpoint_sparse, repo_id, sparse_repo_dir
                 )
 
     pipeline.pose_normalizer = pose_normalizer
@@ -268,7 +284,7 @@ def build_recgen_base(
 
     # SLAT model
     slat_config = _load_model_config(
-        checkpoint_slat, config["slat_config"], repo_id, repo_subdir
+        checkpoint_slat, config["slat_config"], repo_id, slat_repo_dir
     )
     if slat_config and "models" in slat_config and "denoiser" in slat_config["models"]:
         slat_model_config = slat_config["models"]["denoiser"]["args"]
@@ -300,7 +316,7 @@ def build_recgen_base(
         slat_dataset = slat_config.get("dataset", {}).get("args", {})
         if slat_dataset.get("use_pose_normalization", False):
             pipeline.slat_pose_normalizer = _load_pose_stats(
-                "slat_pose_stats.json", checkpoint_slat, repo_id, repo_subdir
+                "slat_pose_stats.json", checkpoint_slat, repo_id, slat_repo_dir
             )
 
     # Load weights
