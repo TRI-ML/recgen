@@ -136,7 +136,7 @@ class SLatCondFlowModel(nn.Module):
         self.use_pose_embedder = use_pose_embedder
         self.pose_embedder_out_channels = pose_embedder_out_channels
         self.pose_representation = pose_representation
-        
+
 
         if self.io_block_channels is not None:
             assert int(np.log2(patch_size)) == np.log2(patch_size), "Patch size must be a power of 2"

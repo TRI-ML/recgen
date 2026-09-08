@@ -2,7 +2,7 @@
 # Install CUDA-dependent packages for RecGen inference.
 #
 # Usage:
-#   bash setup_cuda.sh              # install spconv + flash-attn
+#   bash setup_cuda.sh              # spconv + flash-attn + diff-gaussian-rasterization
 #   bash setup_cuda.sh --nvdiffrast # build nvdiffrast from source
 #   bash setup_cuda.sh --all        # everything
 

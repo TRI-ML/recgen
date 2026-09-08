@@ -111,9 +111,7 @@ class RecGenPipeline(Pipeline):
         
         # Select which model to use for encoding
         assert model_key is not None, "model_key must be provided"
-        # model_key = 'sparse_structure_pose_flow_model'
         model = self.models.get(model_key)
-        print(f"[DEBUG encode_pointmap] Model {model_key}")
         if model is None or not hasattr(model, 'encode_pointmap'):
             raise ValueError(f"Model {model_key} doesn't support pointmap encoding")
 
@@ -150,7 +148,6 @@ class RecGenPipeline(Pipeline):
                     raise ValueError(f"Unsupported mask dimensions: {mask_tensor.shape}")
                 processed_masks.append(mask_tensor)
             mask_tensor = torch.stack(processed_masks)
-            print(f"[DEBUG encode_mask] Mask tensor shape: {mask_tensor.shape}, min: {mask_tensor.min()}, max: {mask_tensor.max()}")
         else:
             raise ValueError(f"Unsupported type of mask: {type(mask)}")
 
@@ -168,7 +165,6 @@ class RecGenPipeline(Pipeline):
 
         # Select which model to use for encoding
         assert model_key is not None, "model_key must be provided"
-        print(f"[DEBUG encode_mask] Model {model_key}")
         model = self.models.get(model_key)
         if model is None or not hasattr(model, 'encode_mask'):
             raise ValueError(f"Model {model_key} doesn't support mask encoding")
@@ -312,7 +308,6 @@ class RecGenPipeline(Pipeline):
         cond_slat['cond'] = torch.cat([cond_slat['cond'], pose_cond], dim=1)
         zero_pose_cond = torch.zeros_like(pose_cond)
         cond_slat['neg_cond'] = torch.cat([cond_slat['neg_cond'], zero_pose_cond], dim=1)
-        print(f"  SLAT pose conditioning: added {pose_cond.shape[1]} token(s)")
         return cond_slat
 
     def sample_sparse_structure_pose(
@@ -387,7 +382,7 @@ class RecGenPipeline(Pipeline):
     def decode_slat(
         self,
         slat: sp.SparseTensor,
-        formats: List[str] = ['mesh', 'gaussian', 'radiance_field'],
+        formats: List[str] = ['mesh', 'gaussian'],
     ) -> dict:
         """
         Decode the structured latent.
@@ -442,13 +437,194 @@ class RecGenPipeline(Pipeline):
             std = torch.tensor(self.slat_normalization['std'])[None].to(slat.device)
             mean = torch.tensor(self.slat_normalization['mean'])[None].to(slat.device)
             slat = slat * std + mean
-            print(f"  Applied denormalization (std/mean)")
-        else:
-            print(f"  Skipped denormalization (slat_normalization is None)")
-        
-        print(f"  slat.feats.shape: {slat.feats.shape}")
-        print(f"[DEBUG sample_slat] Done\n")
         return slat
+
+    def sample_slat_multiview(
+            self,
+            cond_list: List[dict],
+            coords: torch.Tensor,
+            sampler_params: dict = {},
+            mode: str = 'multidiffusion',
+        ) -> sp.SparseTensor:
+            """
+            Sample structured latent fusing N conditioning dicts at every step.
+
+            Each entry of cond_list is a full SLAT cond dict (image+pointmap+mask
+            [+pose] already applied), typically one per (anchor, view_i) pair.
+            mode='multidiffusion' averages the N velocity predictions per Euler
+            step (N forward passes per step); mode='stochastic' round-robins one
+            cond per step (no extra cost).
+            """
+            from ..utils.multi_view_utils import multidiffusion_sampling
+            merged = {**self.slat_sampler_params, **sampler_params}
+            steps = merged.get('steps', 50)
+            with multidiffusion_sampling(
+                self.slat_sampler,
+                [c['cond'] for c in cond_list],
+                num_steps=steps,
+                mode=mode,
+            ):
+                return self.sample_slat(cond_list[0], coords, sampler_params)
+
+    @torch.no_grad()
+    def run_pointmap_many_views(
+            self,
+            view1_image: Image.Image,
+            views2_images: List[Image.Image],
+            view1_pointmap: Union[torch.Tensor, None] = None,
+            views2_pointmaps: Union[List[torch.Tensor], None] = None,
+            view1_mask: Union[Image.Image, None] = None,
+            views2_masks: Union[List[Image.Image], None] = None,
+            num_samples: int = 1,
+            seed: int = 42,
+            multidiffusion_mode: str = 'multidiffusion',
+            sparse_structure_sampler_params: dict = {},
+            slat_sampler_params: dict = {},
+            formats: List[str] = ['mesh', 'gaussian'],
+            slat_single_view: bool = False,
+            slat_multiview_mode: Optional[str] = None,
+        ) -> dict:
+            """
+            Run multi-view inference with N second views informing sampling.
+
+            At each denoising step the velocity predictions from all N (view1, view2_i)
+            conditioning pairs are averaged (multidiffusion) or one is chosen by
+            round-robin (stochastic).  By default SLAT uses anchor + first second view
+            (matching 2-view training). Set slat_single_view=True for legacy behavior.
+
+            Args:
+                view1_image:    Anchor (first) view PIL image.
+                views2_images:  List of N second-view PIL images.
+                view1_pointmap: Anchor pointmap tensor (3, H, W) or None.
+                views2_pointmaps: List of N second-view pointmaps or None.
+                view1_mask:     Anchor mask PIL image or None.
+                views2_masks:   List of N second-view mask PIL images or None.
+                num_samples:    Number of samples to generate.
+                seed:           Random seed.
+                multidiffusion_mode: 'multidiffusion' or 'stochastic'.
+                sparse_structure_sampler_params: Extra params for SS sampler.
+                slat_sampler_params: Extra params for SLAT sampler.
+                formats:        Output formats to decode.
+                slat_single_view: Legacy — SLAT conditioned on anchor view only.
+                slat_multiview_mode: None (default, SLAT uses anchor + first second
+                    view) or 'multidiffusion'/'stochastic' — SLAT sampling fuses all
+                    N (anchor, view_i) pairs like the SS stage. Requires one extra
+                    SS pose sampling per additional view to obtain that pair's pose.
+
+            Returns:
+                dict with 'mesh', 'gaussian', 'pose', 'coords' keys.
+            """
+            from ..utils.multi_view_utils import multidiffusion_sampling
+
+            n = len(views2_images)
+            pms2 = views2_pointmaps if views2_pointmaps is not None else [None] * n
+            ms2  = views2_masks     if views2_masks     is not None else [None] * n
+
+            slat_mode = "single-view" if slat_single_view else "multi-view (anchor + 1st second view)"
+            print(f"\n[run_pointmap_many_views] Processing 1 anchor + {n} second views (mode={multidiffusion_mode}), SLAT mode: {slat_mode}")
+
+            # Build one conditioning dict per (view1, view2_i) pair
+            view_conds = []
+            for v2, pm2, m2 in zip(views2_images, pms2, ms2):
+                has_pm = view1_pointmap is not None or pm2 is not None
+                has_m  = view1_mask     is not None or m2  is not None
+                pms = [view1_pointmap, pm2] if has_pm else None
+                ms  = [view1_mask,     m2]  if has_m  else None
+                cond = self.get_cond_multiview(
+                    [view1_image, v2],
+                    pointmaps=pms,
+                    masks=ms,
+                    model_key='sparse_structure_pose_flow_model',
+                )
+                view_conds.append(cond)
+
+            torch.manual_seed(seed)
+            sampler_params_merged = {**self.sparse_structure_sampler_params, **sparse_structure_sampler_params}
+            steps = sampler_params_merged.get('steps', 50)
+
+            # Sample sparse structure with multi-view averaged conditioning
+            with multidiffusion_sampling(
+                self.sparse_structure_sampler,
+                [c['cond'] for c in view_conds],
+                num_steps=steps,
+                mode=multidiffusion_mode,
+            ):
+                coords, pose_normalized, pose, _all_poses = self.sample_sparse_structure_pose(
+                    view_conds[0], num_samples, sparse_structure_sampler_params
+                )
+
+            if slat_single_view:
+                # Legacy: SLAT uses anchor (first) view only
+                pm1 = view1_pointmap
+                if pm1 is not None and pm1.ndim == 3:
+                    pm1 = pm1.unsqueeze(0)
+                cond_slat = self.get_cond(
+                    [view1_image],
+                    pointmap=pm1,
+                    mask=[view1_mask] if view1_mask is not None else None,
+                    model_key='slat_flow_model',
+                )
+            elif slat_multiview_mode is not None and n > 1:
+                # N-view SLAT: one cond per (anchor, view_i) pair, fused at every
+                # denoising step. Each pair needs its own pose conditioning; poses
+                # for pairs i>0 are predicted with an extra SS pose sampling pass.
+                print(f"[run_pointmap_many_views] SLAT N-view fusion over {n} pairs "
+                      f"(mode={slat_multiview_mode})")
+                pair_poses = [pose_normalized]
+                for i in range(1, n):
+                    _, pose_norm_i, _, _ = self.sample_sparse_structure_pose(
+                        view_conds[i], num_samples, sparse_structure_sampler_params)
+                    # Pin the shared reference (anchor) pose token from pair 0:
+                    # the anchor camera is physically the same in every pair, but
+                    # each SS pass re-predicts it independently. Only the second
+                    # view's pose token should vary across packets.
+                    if pose_norm_i.ndim == 3 and pose_normalized.ndim == 3:
+                        pose_norm_i = pose_norm_i.clone()
+                        pose_norm_i[:, 0] = pose_normalized[:, 0]
+                    pair_poses.append(pose_norm_i)
+
+                slat_conds = []
+                for i, (v2, pm2, m2) in enumerate(zip(views2_images, pms2, ms2)):
+                    slat_pms = None
+                    if view1_pointmap is not None or pm2 is not None:
+                        slat_pms = [view1_pointmap, pm2]
+                    slat_masks = None
+                    if view1_mask is not None or m2 is not None:
+                        slat_masks = [view1_mask, m2]
+                    c = self.get_cond_multiview(
+                        images=[view1_image, v2],
+                        pointmaps=slat_pms,
+                        masks=slat_masks,
+                        model_key='slat_flow_model',
+                    )
+                    slat_conds.append(self._add_pose_cond_to_slat(c, pair_poses[i]))
+                slat = self.sample_slat_multiview(
+                    slat_conds, coords, slat_sampler_params, mode=slat_multiview_mode)
+                output = self.decode_slat(slat, formats)
+                output['pose'] = pose
+                output['coords'] = coords
+                return output
+            else:
+                # Multi-view SLAT: use anchor + first second view (matches 2-view training)
+                slat_images = [view1_image, views2_images[0]]
+                slat_pms = None
+                if view1_pointmap is not None or (views2_pointmaps is not None and views2_pointmaps[0] is not None):
+                    slat_pms = [view1_pointmap, pms2[0]]
+                slat_masks = None
+                if view1_mask is not None or ms2[0] is not None:
+                    slat_masks = [view1_mask, ms2[0]]
+                cond_slat = self.get_cond_multiview(
+                    images=slat_images,
+                    pointmaps=slat_pms,
+                    masks=slat_masks,
+                    model_key='slat_flow_model',
+                )
+            cond_slat = self._add_pose_cond_to_slat(cond_slat, pose_normalized)
+            slat = self.sample_slat(cond_slat, coords, slat_sampler_params)
+            output = self.decode_slat(slat, formats)
+            output['pose'] = pose
+            output['coords'] = coords
+            return output
 
     @torch.no_grad()
     def run_pointmap(
@@ -460,7 +636,7 @@ class RecGenPipeline(Pipeline):
         seed: int = 42,
         sparse_structure_sampler_params: dict = {},
         slat_sampler_params: dict = {},
-        formats: List[str] = ['mesh', 'gaussian', 'radiance_field']
+        formats: List[str] = ['mesh', 'gaussian']
     ) -> dict:
         """
         Run the pipeline.
@@ -528,7 +704,6 @@ class RecGenPipeline(Pipeline):
             dict: Conditioning with 'cond' and 'neg_cond' keys
         """
         num_views = len(images)
-        print(f"[DEBUG get_cond_multiview] Processing {num_views} views")
 
         # Encode all images and concatenate along sequence dimension
         # encode_image now returns only patch tokens (CLS/registers already stripped)
@@ -591,7 +766,7 @@ class RecGenPipeline(Pipeline):
         seed: int = 42,
         sparse_structure_sampler_params: dict = {},
         slat_sampler_params: dict = {},
-        formats: List[str] = ['mesh', 'gaussian', 'radiance_field'],
+        formats: List[str] = ['mesh', 'gaussian'],
         sparse: bool = False,
         status_callback=None,
         slat_single_view: bool = False,

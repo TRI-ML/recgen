@@ -41,6 +41,16 @@ RUN pip install --no-deps --no-build-isolation -e /tmp/recgen || true \
         numpy scipy Pillow trimesh safetensors huggingface-hub easydict tqdm \
         plyfile opencv-python-headless
 
+# Training dependencies (recgen_training package)
+RUN pip install \
+        "webdataset>=0.2" braceexpand "kornia>=0.7,<0.8" "einops>=0.7" \
+        "tensorboard>=2.14" "wandb>=0.16"
+
+# Evaluation dependencies (recgen_eval package: HB / ArtVIP paper evals)
+RUN pip install \
+        "pandas>=2.0" "PyYAML>=6.0" "scikit-learn>=1.3" \
+        "open3d>=0.17,<0.18" "imageio>=2.30" "imageio-ffmpeg>=0.5" pyrender
+
 # CUDA extensions. flash-attn is optional — SDPA fallback exists.
 RUN pip install spconv-cu120
 RUN pip install flash-attn==2.6.3 --no-build-isolation || \
@@ -65,7 +75,7 @@ RUN git clone --depth 1 https://github.com/NVlabs/nvdiffrast.git /tmp/nvdiffrast
     && rm -rf /tmp/nvdiffrast
 
 # ──────────────────────────────────────────────────────────────────────────
-# Stage 2: runtime — slim CUDA runtime + venv from builder
+# Stage 2: runtime — CUDA devel base (JIT extension builds) + venv from builder
 # ──────────────────────────────────────────────────────────────────────────
 FROM nvidia/cuda:12.1.1-devel-ubuntu22.04 AS runtime
 

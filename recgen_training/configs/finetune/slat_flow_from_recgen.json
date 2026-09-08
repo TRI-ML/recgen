@@ -1,0 +1,128 @@
+{
+    "models": {
+        "denoiser": {
+            "name": "ElasticSLatCondFlowModel",
+            "args": {
+                "resolution": 64,
+                "in_channels": 8,
+                "out_channels": 8,
+                "model_channels": 1024,
+                "cond_channels": 1024,
+                "num_blocks": 24,
+                "num_heads": 16,
+                "mlp_ratio": 4,
+                "patch_size": 2,
+                "num_io_res_blocks": 2,
+                "io_block_channels": [
+                    128
+                ],
+                "pe_mode": "ape",
+                "qk_rms_norm": true,
+                "use_fp16": true,
+                "use_point_embedder": true,
+                "point_embedder_out_channels": 1024,
+                "use_mask_embedder": true,
+                "mask_embedder_out_channels": 1024,
+                "use_pose_embedder": true,
+                "pose_embedder_out_channels": 1024,
+                "pose_representation": "9d_translation_scale"
+            }
+        }
+    },
+    "dataset": {
+        "name": "WebDatasetMultiViewStructuredLatent",
+        "args": {
+            "shards": "{data_dir}/wds_slat/{ABO_wds/shard-{000000..000398},HSSD_wds/shard-{000000..000559},Objaverse_recgen_new_wds/shard-{000000..008374},Objaverse_recgen_new_wds/shard-{010000..018208},PartNeXt_wds_full/shard-{000000..001981}}.tar",
+            "num_views": 2,
+            "image_size": 518,
+            "min_aesthetic_score": 4.5,
+            "shuffle_buffer": 200,
+            "length": 189119,
+            "require_pose_data": true,
+            "require_pointmap": true,
+            "use_pose_normalization": true,
+            "pose_variant": "median_quantile_5per",
+            "mix_stereo_depth": true,
+            "pose_stats_file": "{config_dir}/../pose_stats/slat_pose_stats_training.json",
+            "normalization": {
+                "mean": [
+                    -2.1687545776367188,
+                    -0.004347046371549368,
+                    -0.13352349400520325,
+                    -0.08418072760105133,
+                    -0.5271206498146057,
+                    0.7238689064979553,
+                    -1.1414450407028198,
+                    1.2039363384246826
+                ],
+                "std": [
+                    2.377650737762451,
+                    2.386378288269043,
+                    2.124418020248413,
+                    2.1748552322387695,
+                    2.663944721221924,
+                    2.371192216873169,
+                    2.6217446327209473,
+                    2.684523105621338
+                ]
+            }
+        }
+    },
+    "trainer": {
+        "name": "MultiImageConditionedSparseFlowMatchingCFGTrainer",
+        "args": {
+            "max_steps": 20000,
+            "batch_size_per_gpu": 8,
+            "batch_split": 2,
+            "finetune_ckpt": {
+                "denoiser": "checkpoints/RecGen/slat_denoiser_ema0.9999_step0075000.pt"
+            },
+            "optimizer": {
+                "name": "AdamW",
+                "args": {
+                    "lr": 0.0001,
+                    "weight_decay": 0.0
+                }
+            },
+            "ema_rate": [
+                0.9999
+            ],
+            "fp16_mode": "inflat_all",
+            "fp16_scale_growth": 0.001,
+            "elastic": {
+                "name": "LinearMemoryController",
+                "args": {
+                    "target_ratio": 0.85,
+                    "max_mem_ratio_start": 0.6
+                }
+            },
+            "grad_clip": {
+                "name": "AdaptiveGradClipper",
+                "args": {
+                    "max_norm": 1.0,
+                    "clip_percentile": 95
+                }
+            },
+            "i_print": 200,
+            "i_log": 200,
+            "i_sample": 1000,
+            "i_save": 1000,
+            "i_ddpcheck": 5000,
+            "p_uncond": 0.1,
+            "p_single_view": 0.33,
+            "single_view_drop_mode": "last",
+            "t_schedule": {
+                "name": "logitNormal",
+                "args": {
+                    "mean": 1.0,
+                    "std": 1.0
+                }
+            },
+            "sigma_min": 1e-05,
+            "image_cond_model": "dinov2_vitl14_reg",
+            "use_pose_conditioning": true,
+            "pose_representation": "9d_translation_scale",
+            "enable_snapshot": true
+        }
+    }
+}

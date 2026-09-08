@@ -49,6 +49,29 @@ notebook = [
     "imageio-ffmpeg",
 ]
 
+# Training / fine-tuning (recgen_training package)
+train = [
+    "webdataset>=0.2",
+    "braceexpand",
+    "kornia>=0.7,<0.8",
+    "einops>=0.7",
+    "tensorboard>=2.14",
+    "wandb>=0.16",
+]
+
+# Evaluation (recgen_eval package: HB / ArtVIP paper evals).
+# Also needs the glb extra + nvdiffrast/diff_gaussian_rasterization CUDA builds
+# (bash scripts/setup_cuda.sh --all) and open3d/pyrender from the vis stack.
+eval = [
+    "pandas>=2.0",
+    "PyYAML>=6.0",
+    "scikit-learn>=1.3",
+    "open3d>=0.17,<0.18",
+    "imageio>=2.30",
+    "imageio-ffmpeg>=0.5",
+    "pyrender",
+]
+
 # Dev tools for tests + lint (used in CI)
 dev = [
     "pytest",
@@ -57,7 +80,11 @@ dev = [
 ]
 
 # Everything
-all = ["recgen_inference[glb,notebook,dev]"]
+all = ["recgen_inference[glb,notebook,dev,train,eval]"]
 
 [tool.setuptools.packages.find]
-include = ["recgen_inference*"]
+include = ["recgen_inference*", "recgen_training*", "recgen_eval*"]
+
+[tool.setuptools.package-data]
+recgen_training = ["configs/**/*.json"]
+recgen_eval = ["configs/*.yaml", "splits/**/*.txt"]

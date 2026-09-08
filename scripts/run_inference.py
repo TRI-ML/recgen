@@ -77,9 +77,22 @@ def parse_args() -> argparse.Namespace:
         help="Subfolder name under outputs/inference_outputs/ when --out is not given.",
     )
     p.add_argument("--checkpoint", default="recgen_base.multiview_stereo", help="RecGen checkpoint name")
+    p.add_argument(
+        "--checkpoint-slat", default=None,
+        help="Local path to a SLAT denoiser checkpoint (overrides the HF download)",
+    )
+    p.add_argument(
+        "--checkpoint-sparse", default=None,
+        help="Local path to a sparse-structure denoiser checkpoint (overrides the HF download)",
+    )
     p.add_argument("--seed", type=int, default=42)
     p.add_argument("--save-splat", action="store_true", help="Also write Gaussian splat (.ply)")
     p.add_argument("--save-glb", action="store_true", help="Also write textured GLB (requires nvdiffrast)")
+    p.add_argument(
+        "--posthoc-color", default="none", choices=["none", "gamma", "affine", "gamma_affine"],
+        help="Post-hoc asset color calibration against the input image "
+             "(falls back to identity when the fit is unreliable)",
+    )
     return p.parse_args()
 
 
@@ -90,10 +103,15 @@ def main() -> None:
     K = load_intrinsics(args.intrinsics)
 
     print(f"[run_inference] Loading pipeline: {args.checkpoint}")
-    pipeline = build_recgen.build(args.checkpoint)
+    pipeline = build_recgen.build(
+        args.checkpoint,
+        checkpoint_slat=args.checkpoint_slat,
+        checkpoint_sparse=args.checkpoint_sparse,
+    )
 
     print("[run_inference] Running inference...")
-    result = generate(pipeline, image=rgb, depth=depth, mask=mask, intrinsics=K, seed=args.seed)
+    result = generate(pipeline, image=rgb, depth=depth, mask=mask, intrinsics=K, seed=args.seed,
+                      posthoc_color=args.posthoc_color)
 
     print(f"[run_inference] Mesh: {result.mesh.vertices.shape[0]} vertices, "
           f"{result.mesh.faces.shape[0]} faces")

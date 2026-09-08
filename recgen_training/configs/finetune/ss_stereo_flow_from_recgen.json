@@ -1,0 +1,95 @@
+{
+    "models": {
+        "denoiser": {
+            "name": "SparseStructurePoseFlowModel",
+            "args": {
+                "resolution": 16,
+                "in_channels": 8,
+                "out_channels": 8,
+                "model_channels": 1024,
+                "cond_channels": 1024,
+                "num_blocks": 24,
+                "num_heads": 16,
+                "mlp_ratio": 4,
+                "patch_size": 1,
+                "pe_mode": "ape",
+                "qk_rms_norm": true,
+                "use_fp16": true,
+                "use_point_embedder": true,
+                "point_embedder_out_channels": 1024,
+                "use_mask_embedder": true,
+                "mask_embedder_out_channels": 1024,
+                "use_frame_token_embedder": true,
+                "pose_representation": "6d_translation_scale",
+                "num_pose_tokens": 2
+            }
+        }
+    },
+    "dataset": {
+        "name": "WebDatasetMultiViewSparseStructureLatent",
+        "args": {
+            "shards": "{data_dir}/wds_multiview_robust_pose_final/{ABO_wds/shard-{000000..000346},HSSD_wds/shard-{000000..000519},Objaverse_recgen_new_wds/shard-{000000..015735},PhysX3DParts_wds/shard-{000000..000933},PartNeXt_wds/shard-{000000..001528},PartNetMobility_wds/shard-{000000..000212}}.tar",
+            "num_views": 2,
+            "min_aesthetic_score": 0.0,
+            "image_size": 518,
+            "shuffle_buffer": 200,
+            "length": 198455,
+            "require_pose_data": true,
+            "require_pointmap": true,
+            "use_pose_normalization": true,
+            "pose_variant": "median_quantile_5per",
+            "mix_stereo_depth": true,
+            "pose_stats_file": "{config_dir}/../pose_stats/stereo_pose_stats_training.json"
+        }
+    },
+    "trainer": {
+        "name": "MultiImageConditionedFlowMatchingCFGTrainer",
+        "args": {
+            "max_steps": 20000,
+            "batch_size_per_gpu": 8,
+            "batch_split": 2,
+            "finetune_ckpt": {
+                "denoiser": "checkpoints/RecGen/stereo_denoiser_ema0.9999_step0055000.pt"
+            },
+            "optimizer": {
+                "name": "AdamW",
+                "args": {
+                    "lr": 0.0001,
+                    "weight_decay": 0.0
+                }
+            },
+            "ema_rate": [
+                0.9999
+            ],
+            "fp16_mode": "inflat_all",
+            "fp16_scale_growth": 0.001,
+            "grad_clip": {
+                "name": "AdaptiveGradClipper",
+                "args": {
+                    "max_norm": 1.0,
+                    "clip_percentile": 95
+                }
+            },
+            "i_print": 200,
+            "i_log": 200,
+            "i_sample": 1000,
+            "i_save": 1000,
+            "i_ddpcheck": 5000,
+            "p_uncond": 0.1,
+            "p_single_view": 0.33,
+            "single_view_drop_mode": "last",
+            "t_schedule": {
+                "name": "logitNormal",
+                "args": {
+                    "mean": 1.0,
+                    "std": 1.0
+                }
+            },
+            "sigma_min": 1e-05,
+            "pose_alpha": 0.01,
+            "pose_representation": "6d_translation_scale",
+            "use_pose_normalization": true,
+            "image_cond_model": "dinov2_vitl14_reg"
+        }
+    }
+}

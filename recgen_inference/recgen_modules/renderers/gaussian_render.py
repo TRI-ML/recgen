@@ -152,6 +152,7 @@ class GaussianRenderer:
 
     def __init__(self, rendering_options={}) -> None:
         self.pipe = edict({
+            "kernel_size": 0.1,
             "convert_SHs_python": False,
             "compute_cov3D_python": False,
             "scale_modifier": 1.0,

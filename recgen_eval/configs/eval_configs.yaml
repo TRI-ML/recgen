@@ -1,0 +1,24 @@
+mssd_rec: [0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5]
+mspd_rec: [5, 10, 15, 20, 25, 30, 35, 40, 45, 50]
+vsd_delta: 15.0
+vsd_taus: [0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5]
+vsd_rec: [0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5]
+pose_recall_th: [[5, 5], [5, 10], [10, 10]]
+
+# Mask erosion configuration (default)
+mask_erosion_enabled: true
+mask_erosion_params:
+  kernel_size: 3
+  iterations: 1
+
+# No point cloud filtering — normalization handles outliers robustly
+filter_outliers_type: null
+filter_outliers_params: null
+
+# Pointmap normalization - matches training (pose_variant: median_quantile_5per)
+# Uses median centering + quantile-based scale (5% tail drop), keeps all valid points
+normalization_method: median_quantile
+quantile_drop_threshold: 0.05
+
+# Color chamfer metrics (slow — sample colors from mesh surface)
+compute_color_chamfer: true

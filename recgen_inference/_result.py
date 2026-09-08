@@ -39,6 +39,7 @@ class RecGenResult:
     rgb: np.ndarray
     intrinsics: np.ndarray
     _outputs: Dict[str, Any] = field(repr=False, default_factory=dict)
+    posthoc_color: Optional[Dict[str, Any]] = None
 
     def save(
         self,
@@ -146,6 +147,10 @@ class RecGenResult:
         with open(output_dir / "metadata.json", "w") as f:
             json.dump(metadata, f, indent=2)
 
+        if self.posthoc_color is not None:
+            with open(output_dir / "posthoc_color.json", "w") as f:
+                json.dump(self.posthoc_color, f)
+
         if save_inputs:
             inp_dir = output_dir / "input_files"
             inp_dir.mkdir(exist_ok=True)
@@ -164,6 +169,7 @@ def build_result(
     outputs: Dict[str, Any],
     rgb: np.ndarray,
     intrinsics: np.ndarray,
+    posthoc_color: Optional[Dict[str, Any]] = None,
 ) -> RecGenResult:
     """Construct a RecGenResult, deriving pose_quat from the parsed components."""
     trans = np.asarray(parsed_pose["translation"], dtype=np.float64)
@@ -180,6 +186,7 @@ def build_result(
         rgb=np.asarray(rgb),
         intrinsics=np.asarray(intrinsics),
         _outputs=outputs,
+        posthoc_color=posthoc_color,
     )
 
 

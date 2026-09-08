@@ -36,3 +36,7 @@ Thumbs.db
 .nfs*
 hf/
 out/
+
+# Training artifacts
+checkpoints/
+data/

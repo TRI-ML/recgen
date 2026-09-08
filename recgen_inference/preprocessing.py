@@ -240,4 +240,7 @@ def preprocess_view(image, depth, mask, intrinsics,
         'pointmap': pointmap_tensor,
         'mask': resized_mask,
         'cam2ncam': cam2ncam,
+        # Full-resolution eroded mask (uint8 0/255), aligned with the input
+        # image/intrinsics — used by the post-hoc color calibration.
+        'mask_full': mask_eroded,
     }

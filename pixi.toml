@@ -65,6 +65,21 @@ imageio-ffmpeg = ">=0.5"
 opencv-python-headless = ">=4.8"
 pyrender = "*"
 
+# ── Training feature ────────────────────────────────────────────────────
+[feature.train.pypi-dependencies]
+webdataset = ">=0.2"
+braceexpand = "*"
+kornia = ">=0.7,<0.8"
+einops = ">=0.7"
+tensorboard = ">=2.14"
+wandb = ">=0.16"
+
+# ── Evaluation feature (recgen_eval: HB / ArtVIP paper evals) ───────────
+[feature.eval.pypi-dependencies]
+pandas = ">=2.0"
+pyyaml = ">=6.0"
+scikit-learn = ">=1.3"
+
 # ── CUDA 12.1 feature ───────────────────────────────────────────────────
 [feature.cu121]
 channels = ["pytorch", "nvidia/label/cuda-12.1.0", "nvidia", "conda-forge"]
@@ -107,6 +122,10 @@ spconv-cu118 = ">=2.3"
 [environments]
 default = { features = ["base", "cu121", "glb", "vis"], solve-group = "cu121" }
 cu118 = { features = ["base", "cu118", "glb", "vis"], solve-group = "cu118" }
+train = { features = ["base", "cu121", "glb", "vis", "train"], solve-group = "cu121" }
+cu118-train = { features = ["base", "cu118", "glb", "vis", "train"], solve-group = "cu118" }
+eval = { features = ["base", "cu121", "glb", "vis", "eval"], solve-group = "cu121" }
+cu118-eval = { features = ["base", "cu118", "glb", "vis", "eval"], solve-group = "cu118" }
 
 # ── Tasks ────────────────────────────────────────────────────────────────
 [tasks]
